@@ -1,0 +1,186 @@
+Project LibraryManagementSystem {
+  database_type: 'PostgreSQL'
+  Note: 'EF Core 8 code-first model for the Library Management System. Every DateTime/DateTime? is stored as Unix seconds in a bigint column. DateOnly values remain SQL date. Business tables use soft delete via DeletedAt; LibrarySettings is the single editable config row and has no DeletedAt.'
+}
+
+Table Categories {
+  CategoryId integer [pk, increment]
+  Name varchar(100) [not null]
+  Description varchar(500)
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'IX_Categories_Name is UNIQUE only WHERE DeletedAt IS NULL.'
+
+  indexes {
+    (Name) [name: 'IX_Categories_Name', unique]
+  }
+}
+
+Table Authors {
+  AuthorId integer [pk, increment]
+  FullName varchar(150) [not null]
+  Bio varchar(500)
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+}
+
+Table Books {
+  BookId integer [pk, increment]
+  Title varchar(200) [not null]
+  ISBN varchar(13) [not null]
+  CategoryId integer [not null]
+  TotalCopies integer [not null, default: 0, note: 'CHECK TotalCopies >= 0']
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'IX_Books_ISBN is UNIQUE only WHERE DeletedAt IS NULL. Available copies = TotalCopies - open Loans.'
+
+  indexes {
+    (CategoryId) [name: 'IX_Books_CategoryId']
+    (ISBN) [name: 'IX_Books_ISBN', unique]
+  }
+}
+
+Table BookAuthors {
+  BookId integer [pk, not null]
+  AuthorId integer [pk, not null]
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'Composite PK. Rows are soft-deleted/revived when a book author list changes.'
+
+  indexes {
+    (AuthorId) [name: 'IX_BookAuthors_AuthorId']
+  }
+}
+
+Table Members {
+  MemberId integer [pk, increment]
+  FullName varchar(150) [not null]
+  Email citext [not null, note: 'Case-insensitive; unique among live rows']
+  Phone varchar(20)
+  IsActive boolean [not null, default: true]
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'CHECK char_length(trim(Email)) > 0 AND char_length(Email) <= 150. IX_Members_Email is UNIQUE only WHERE DeletedAt IS NULL.'
+
+  indexes {
+    (Email) [name: 'IX_Members_Email', unique]
+  }
+}
+
+Table MembershipTypes {
+  MembershipTypeId integer [pk, increment]
+  Name varchar(50) [not null]
+  DurationMonths integer [not null, note: 'CHECK > 0']
+  Fee numeric(10,2) [not null, note: 'CHECK >= 0; 0 means Regular/Free']
+  BorrowLimit integer [not null, note: 'CHECK > 0; Regular 3, Premium 5']
+  LoanPeriodDays integer [not null, note: 'CHECK > 0; Regular 14, Premium 21']
+  IsActive boolean [not null, default: true]
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'IX_MembershipTypes_Name is UNIQUE only WHERE DeletedAt IS NULL.'
+
+  indexes {
+    (Name) [name: 'IX_MembershipTypes_Name', unique]
+  }
+}
+
+Table Memberships {
+  MembershipId integer [pk, increment]
+  MemberId integer [not null]
+  MembershipTypeId integer [not null]
+  StartDate date [not null]
+  EndDate date [not null, note: 'CHECK EndDate >= StartDate']
+  PaymentStatus varchar(20) [not null, default: 'Pending', note: "CHECK IN ('Paid', 'Pending')"]
+  Status varchar(20) [not null, default: 'Active', note: "CHECK IN ('Active', 'Expired', 'Cancelled')"]
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'History is preserved: upgrade/renew expire the old row and insert a new Active row.'
+
+  indexes {
+    (MemberId, Status) [name: 'IX_Memberships_MemberId_Status']
+    (MembershipTypeId) [name: 'IX_Memberships_MembershipTypeId']
+  }
+}
+
+Table Loans {
+  LoanId bigint [pk, increment]
+  BookId integer [not null]
+  MemberId integer [not null]
+  IssueDate date [not null]
+  DueDate date [not null, note: 'CHECK DueDate >= IssueDate']
+  ReturnDate date [note: 'NULL means the loan is open']
+  FineAmount numeric(8,2) [not null, default: 0, note: 'CHECK >= 0']
+  FinePaidAmount numeric(8,2) [not null, default: 0, note: 'CHECK >= 0 AND <= FineAmount']
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'BR-06 unique index (BookId, MemberId) WHERE ReturnDate IS NULL AND DeletedAt IS NULL. CHECK ReturnDate IS NULL OR ReturnDate >= IssueDate. Issue and return each run in one transaction.'
+
+  indexes {
+    (BookId, MemberId) [name: 'IX_Loans_BookId_MemberId', unique]
+    (MemberId) [name: 'IX_Loans_MemberId']
+  }
+}
+
+Table Reservations {
+  ReservationId bigint [pk, increment]
+  BookId integer [not null]
+  MemberId integer [not null]
+  ReservedAt bigint [not null, note: 'Unix seconds; FCFS queue order']
+  Status varchar(20) [not null, default: 'Pending', note: "CHECK IN ('Pending', 'Fulfilled', 'Cancelled', 'Expired')"]
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+  DeletedAt bigint [note: 'Unix seconds; soft delete']
+
+  Note: 'Only created when a book has 0 available copies. One pending per (BookId, MemberId) WHERE DeletedAt IS NULL. Fulfilment serves the oldest Pending row ordered by ReservedAt, ReservationId.'
+
+  indexes {
+    (BookId, MemberId) [name: 'IX_Reservations_BookId_MemberId', unique]
+    (BookId, ReservedAt, ReservationId) [name: 'IX_Reservations_BookId_ReservedAt_ReservationId']
+    (MemberId) [name: 'IX_Reservations_MemberId']
+  }
+}
+
+Table LibrarySettings {
+  LibrarySettingId integer [pk, increment]
+  ReservationHoldDays integer [not null, default: 2, note: 'CHECK > 0']
+  FinePerDay numeric(8,2) [not null, default: 5, note: 'CHECK >= 0']
+  MaximumFine numeric(8,2) [not null, default: 200, note: 'CHECK >= 0']
+  FineBorrowingLimit numeric(8,2) [not null, default: 100, note: 'CHECK >= 0; borrowing blocked only when unpaid fines EXCEED this value']
+  CreatedAt bigint [not null, note: 'Unix seconds']
+  UpdatedAt bigint [note: 'Unix seconds']
+
+  Note: 'Singleton config row (Id = 1), editable at /settings. Never deleted, so no DeletedAt and no soft-delete filter.'
+}
+
+Ref: Books.CategoryId > Categories.CategoryId
+
+Ref: BookAuthors.BookId > Books.BookId
+
+Ref: BookAuthors.AuthorId > Authors.AuthorId
+
+Ref: Memberships.MemberId > Members.MemberId
+
+Ref: Memberships.MembershipTypeId > MembershipTypes.MembershipTypeId
+
+Ref: Loans.BookId > Books.BookId
+
+Ref: Loans.MemberId > Members.MemberId
+
+Ref: Reservations.BookId > Books.BookId
+
+Ref: Reservations.MemberId > Members.MemberId

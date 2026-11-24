@@ -1,0 +1,40 @@
+# Build output
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+[Bb]uild/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test / Playwright output
+TestResults/
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Local secrets and environment files
+appsettings.Development.json
+appsettings.Local.json
+.env
+*.secrets.json
+
+# Logs and OS files
+*.log
+*.db
+*.bak
+Thumbs.db
+Desktop.ini
+
+# NuGet
+*.nupkg
+.nuget/

@@ -1,0 +1,13 @@
+﻿@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized()
+    {
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var target = "/" + relative;
+        var returnUrl = Uri.EscapeDataString(target);
+
+        // Force a full page load so the cookie is read by the server middleware.
+        Navigation.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

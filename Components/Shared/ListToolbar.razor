@@ -1,0 +1,140 @@
+@using Microsoft.AspNetCore.Components
+
+@if (TabOptions.Count > 0)
+{
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        @foreach (var tab in TabOptions)
+        {
+            <li class="nav-item" role="presentation">
+                <button type="button"
+                        class="nav-link @(tab == SelectedTab ? "active" : "")"
+                        role="tab"
+                        aria-selected="@(tab == SelectedTab ? "true" : "false")"
+                        @onclick="() => OnTabClick(tab)">
+                    @tab
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+<div class="d-flex flex-column flex-lg-row gap-2 align-items-lg-center justify-content-between mb-3">
+    <div class="d-flex flex-column flex-sm-row gap-2 w-100">
+        <div class="input-group" style="max-width: 340px;">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search"
+                   class="form-control"
+                   placeholder="@Placeholder"
+                   value="@SearchText"
+                   @oninput="OnSearchInput" />
+            @if (SearchText.Length > 0)
+            {
+                <button type="button" class="btn btn-outline-secondary"
+                        title="Clear search" @onclick="ClearSearch">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            }
+        </div>
+
+        @if (FilterOptions.Count > 0)
+        {
+            <select class="form-select" style="max-width: 200px;"
+                    value="@SelectedFilter" @onchange="OnFilterChange">
+                @foreach (var option in FilterOptions)
+                {
+                    <option @key="option" value="@option">@option</option>
+                }
+            </select>
+        }
+    </div>
+
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        <span class="text-muted small">@TotalCount @ItemLabel</span>
+        <select class="form-select form-select-sm" style="width: auto;"
+                value="@PageSize" @onchange="OnPageSizeChange">
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="50">50 / page</option>
+            <option value="100">100 / page</option>
+        </select>
+    </div>
+</div>
+
+@if (TotalPages > 1)
+{
+    <nav aria-label="List pages" class="mb-3">
+        <ul class="pagination pagination-sm justify-content-end mb-0">
+            <li class="page-item @(PageNumber <= 1 ? "disabled" : "")">
+                <button type="button" class="page-link" disabled="@(PageNumber <= 1)"
+                        @onclick="() => Go(1)">First</button>
+            </li>
+            <li class="page-item @(PageNumber <= 1 ? "disabled" : "")">
+                <button type="button" class="page-link" disabled="@(PageNumber <= 1)"
+                        @onclick="() => Go(PageNumber - 1)">Prev</button>
+            </li>
+
+            @for (var i = FirstPage; i <= LastPage; i++)
+            {
+                var page = i;
+                <li class="page-item @(page == PageNumber ? "active" : "")">
+                    <button type="button" class="page-link"
+                            aria-current="@(page == PageNumber ? "page" : null)"
+                            @onclick="() => Go(page)">@(page)</button>
+                </li>
+            }
+
+            <li class="page-item @(PageNumber >= TotalPages ? "disabled" : "")">
+                <button type="button" class="page-link" disabled="@(PageNumber >= TotalPages)"
+                        @onclick="() => Go(PageNumber + 1)">Next</button>
+            </li>
+            <li class="page-item @(PageNumber >= TotalPages ? "disabled" : "")">
+                <button type="button" class="page-link" disabled="@(PageNumber >= TotalPages)"
+                        @onclick="() => Go(TotalPages)">Last</button>
+            </li>
+        </ul>
+    </nav>
+}
+
+@code {
+    [Parameter] public string SearchText { get; set; } = "";
+    [Parameter] public EventCallback<string> SearchTextChanged { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Search…";
+    [Parameter] public string ItemLabel { get; set; } = "records";
+
+    [Parameter] public IReadOnlyList<string> FilterOptions { get; set; } = Array.Empty<string>();
+    [Parameter] public string SelectedFilter { get; set; } = "All";
+    [Parameter] public EventCallback<string> SelectedFilterChanged { get; set; }
+
+    [Parameter] public IReadOnlyList<string> TabOptions { get; set; } = Array.Empty<string>();
+    [Parameter] public string SelectedTab { get; set; } = "";
+    [Parameter] public EventCallback<string> SelectedTabChanged { get; set; }
+
+    [Parameter] public int PageNumber { get; set; } = 1;
+    [Parameter] public EventCallback<int> PageNumberChanged { get; set; }
+    [Parameter] public int TotalPages { get; set; } = 1;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int PageSize { get; set; } = 10;
+    [Parameter] public EventCallback<int> PageSizeChanged { get; set; }
+
+    private int FirstPage => Math.Max(1, Math.Min(PageNumber - 2, TotalPages - 4));
+    private int LastPage => Math.Min(TotalPages, FirstPage + 4);
+
+    private Task OnSearchInput(ChangeEventArgs args) =>
+        SearchTextChanged.InvokeAsync(args.Value?.ToString() ?? "");
+
+    private Task ClearSearch() => SearchTextChanged.InvokeAsync("");
+
+    private Task OnFilterChange(ChangeEventArgs args) =>
+        SelectedFilterChanged.InvokeAsync(args.Value?.ToString() ?? "All");
+
+    private Task OnTabClick(string tab) => SelectedTabChanged.InvokeAsync(tab);
+
+    private async Task OnPageSizeChange(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var size))
+            await PageSizeChanged.InvokeAsync(size);
+    }
+
+    private Task Go(int page) => PageNumberChanged.InvokeAsync(page);
+}

@@ -1,0 +1,212 @@
+@page "/loans/create"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject ILoanService LoanSvc
+@inject IMembershipService MembershipSvc
+@inject NavigationManager Nav
+
+<PageTitle>Issue book - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Issue book</h1>
+        <p class="text-muted mb-0">Lend an available copy to an active member.</p>
+    </div>
+    <a href="loans" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+@if (isLoading)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body" style="max-width: 680px;">
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                    </div>
+                }
+
+                <div class="row g-3">
+                    <div class="col-md-6 mb-3">
+                        <label for="book" class="form-label">Book</label>
+                        <InputSelect id="book" class="form-select" @bind-Value="model.BookId">
+                            <option value="0">-- Select book --</option>
+                            @foreach (var book in formData.Books)
+                            {
+                                <option @key="book.BookId" value="@book.BookId"
+                                        disabled="@(book.AvailableCopies <= 0)">
+                                    @book.Title (@book.AvailableCopies of @book.TotalCopies available)
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="member" class="form-label">Member</label>
+                        <InputSelect id="member" class="form-select" @bind-Value="model.MemberId"
+                                     @bind-Value:after="OnMemberChanged">
+                            <option value="0">-- Select member --</option>
+                            @foreach (var member in formData.Members)
+                            {
+                                <option @key="member.MemberId" value="@member.MemberId"
+                                        disabled="@(!member.IsActive)">
+                                    @member.FullName@(member.IsActive ? "" : " (inactive)")
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+
+                @if (borrowInfo is not null)
+                {
+                    @if (!borrowInfo.HasActiveMembership)
+                    {
+                        <div class="alert alert-warning small">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            This member has <strong>no active membership</strong>. Renew their membership
+                            before issuing a book. <a href="memberships" class="alert-link">Manage memberships</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-light border small">
+                            <strong>@borrowInfo.PlanName</strong> &middot;
+                            @borrowInfo.BorrowLimit-book limit &middot;
+                            @borrowInfo.OpenLoans currently on loan &middot;
+                            valid until @borrowInfo.ActiveUntil?.ToString("dd MMM yyyy")
+                            @if (borrowInfo.OpenLoans >= borrowInfo.BorrowLimit)
+                            {
+                                <div class="text-danger mt-1">
+                                    Borrow limit reached — a new loan will be rejected.
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                <div class="row g-3">
+                    <div class="col-md-6 mb-3">
+                        <label for="issue" class="form-label">Issue date</label>
+                        <InputDate id="issue" class="form-control" @bind-Value="model.IssueDate"
+                                   @bind-Value:after="OnIssueDateChanged" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="due" class="form-label">Due date</label>
+                        <InputDate id="due" class="form-control" @bind-Value="model.DueDate"
+                                   @bind-Value:after="OnDueDateChanged" />
+                        @if (dueDateManuallyEdited)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 mt-1"
+                                    @onclick="ResetDueDate">
+                                Reset to plan default
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="alert alert-info small">
+                    The due date is filled from the member's plan when you select them. You can change
+                    any date; the member still needs a valid membership, borrow limit and no blocking fine.
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Issue book
+                    </button>
+                    <a href="loans" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private LoanFormData formData = new(new(), new());
+    private readonly LoanInput model = new();
+    private BorrowInfo? borrowInfo;
+    private bool dueDateManuallyEdited;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Make sure yesterday's plans are already Expired before showing the form.
+        await MembershipSvc.RefreshExpiriesAsync();
+        formData = await LoanSvc.GetFormDataAsync();
+        model.IssueDate = DateOnly.FromDateTime(DateTime.Today);
+        model.DueDate = model.IssueDate.AddDays(14);
+        isLoading = false;
+    }
+
+    private async Task OnMemberChanged()
+    {
+        borrowInfo = model.MemberId > 0
+            ? await LoanSvc.GetBorrowInfoAsync(model.MemberId)
+            : null;
+
+        if (!dueDateManuallyEdited) ApplyPlanDueDate();
+    }
+
+    private void OnIssueDateChanged()
+    {
+        if (!dueDateManuallyEdited) ApplyPlanDueDate();
+    }
+
+    private void OnDueDateChanged() => dueDateManuallyEdited = true;
+
+    private void ResetDueDate()
+    {
+        dueDateManuallyEdited = false;
+        ApplyPlanDueDate();
+    }
+
+    private void ApplyPlanDueDate()
+    {
+        var days = borrowInfo is { LoanPeriodDays: > 0 }
+            ? borrowInfo.LoanPeriodDays
+            : 14;
+
+        var due = model.IssueDate.AddDays(days);
+
+        // A loan cannot run past the membership end date.
+        if (borrowInfo?.ActiveUntil is { } end && end < due)
+            due = end;
+
+        model.DueDate = due;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+
+        if (model.BookId == 0 || model.MemberId == 0)
+        {
+            errorMessage = "Please select a book and a member.";
+            return;
+        }
+
+        if (model.DueDate < model.IssueDate)
+        {
+            errorMessage = "Due date cannot be before the issue date.";
+            return;
+        }
+
+        var result = await LoanSvc.CreateAsync(model);
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage ?? "Could not issue this book.";
+            return;
+        }
+
+        Nav.NavigateTo("/loans");
+    }
+}

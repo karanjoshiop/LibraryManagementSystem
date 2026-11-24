@@ -1,0 +1,70 @@
+@page "/authors/create"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IAuthorService AuthorSvc
+@inject NavigationManager Nav
+
+<PageTitle>New author - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>New author</h1>
+        <p class="text-muted mb-0">Add a new author to the library.</p>
+    </div>
+    <a href="authors" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 640px;">
+        <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger d-flex align-items-center" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                </div>
+            }
+
+            <div class="mb-3">
+                <label for="fullName" class="form-label">Full name</label>
+                <InputText id="fullName" class="form-control" @bind-Value="model.FullName" />
+                <ValidationMessage For="@(() => model.FullName)" />
+            </div>
+
+            <div class="mb-4">
+                <label for="bio" class="form-label">Bio</label>
+                <InputTextArea id="bio" class="form-control" rows="4"
+                               @bind-Value="model.Bio" />
+                <ValidationMessage For="@(() => model.Bio)" />
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+                <a href="authors" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private readonly AuthorInput model = new();
+    private string? errorMessage;
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        if (!await AuthorSvc.CreateAsync(model))
+        {
+            errorMessage = "An author with this name already exists.";
+            return;
+        }
+
+        Nav.NavigateTo("/authors");
+    }
+}

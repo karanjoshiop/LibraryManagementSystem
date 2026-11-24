@@ -1,0 +1,85 @@
+﻿@page "/login"
+@layout Layout.BlankLayout
+@inject NavigationManager Nav
+
+<PageTitle>Sign in - Library Management</PageTitle>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <div class="auth-brand-icon"><i class="bi bi-book-half"></i></div>
+            <h1>Library Management</h1>
+            <p>Sign in to access your library dashboard</p>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger d-flex align-items-center" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <span>Invalid username or password. Please try again.</span>
+            </div>
+        }
+
+        <form method="post" action="/account/login" data-no-enhance>
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input id="username" name="username" type="text"
+                           class="form-control" placeholder="Enter your username"
+                           autocomplete="username" required autofocus />
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                    <input id="password" name="password" type="@PasswordInputType"
+                           class="form-control" placeholder="Enter your password"
+                           autocomplete="current-password" required />
+                    <button class="btn btn-outline-secondary eye-toggle" type="button"
+                            @onclick="TogglePassword" tabindex="-1"
+                            aria-label="@(showPassword ? "Hide password" : "Show password")">
+                        <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 btn-lg">
+                <i class="bi bi-box-arrow-in-right me-2"></i>Sign in
+            </button>
+        </form>
+
+        <div class="auth-hint">
+            Demo credentials: <code>librarian</code> / <code>library@123</code>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Error { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private bool showPassword;
+    private string PasswordInputType => showPassword ? "text" : "password";
+    private void TogglePassword() => showPassword = !showPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Covers client-side navigation to /login inside an existing circuit.
+        if (AuthenticationStateTask is not null
+            && (await AuthenticationStateTask).User.Identity?.IsAuthenticated == true)
+        {
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+    }
+}

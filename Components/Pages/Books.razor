@@ -1,0 +1,174 @@
+@page "/books"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inherits ListPageBase<BookDto>
+@inject IBookService BookSvc
+
+<PageTitle>Books - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Books</h1>
+        <p class="text-muted mb-0">Manage your library collection.</p>
+    </div>
+    <a href="books/create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New book
+    </a>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (isLoading)
+        {
+            <div class="text-center py-4 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Loading…
+            </div>
+        }
+        else
+        {
+            <ListToolbar SearchText="@SearchText"
+                         SearchTextChanged="OnSearchChanged"
+                         Placeholder="Search title, ISBN, category or author"
+                         ItemLabel="books"
+                         FilterOptions="@FilterOptions"
+                         SelectedFilter="@SelectedFilter"
+                         SelectedFilterChanged="OnFilterChanged"
+                         PageNumber="@PageNumber"
+                         PageNumberChanged="OnPageChanged"
+                         PageSize="@PageSize"
+                         PageSizeChanged="OnPageSizeChanged"
+                         TotalPages="@TotalPages"
+                         TotalCount="@TotalCount" />
+
+            @if (AllItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No books found.
+                </div>
+            }
+            else if (FilteredItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-search fs-1 d-block mb-2"></i>
+                    No books match your search or filter.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>ISBN</th>
+                                <th>Category</th>
+                                <th>Authors</th>
+                                <th style="width: 120px;">Available</th>
+                                <th style="width: 230px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var book in PageItems)
+                            {
+                                <tr @key="book.BookId">
+                                    <td class="fw-semibold">@book.Title</td>
+                                    <td class="text-muted"><code>@book.ISBN</code></td>
+                                    <td><span class="badge bg-primary-subtle text-primary-emphasis">@book.CategoryName</span></td>
+                                    <td class="text-muted">@string.Join(", ", book.AuthorNames)</td>
+                                    <td>
+                                        <span class="badge @(book.AvailableCopies > 0 ? "bg-success-subtle text-success-emphasis" : "bg-danger-subtle text-danger-emphasis")">
+                                            @book.AvailableCopies / @book.TotalCopies
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                                            @if (pendingDeleteId == book.BookId)
+                                            {
+                                                <span class="small me-1">Delete?</span>
+                                                <button class="btn btn-sm btn-danger"
+                                                        @onclick="() => ConfirmDeleteAsync(book.BookId)">
+                                                    Yes
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => pendingDeleteId = null">
+                                                    Cancel
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <a href="@($"books/edit/{book.BookId}")"
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => pendingDeleteId = book.BookId">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private int? pendingDeleteId;
+
+    protected override IReadOnlyList<string> FilterOptions =>
+        new[] { "All", "Available", "Out of stock" };
+
+    protected override IEnumerable<string?> GetSearchValues(BookDto book) => new[]
+    {
+        book.Title,
+        book.ISBN,
+        book.CategoryName,
+        string.Join(" ", book.AuthorNames)
+    };
+
+    protected override bool MatchesFilter(BookDto book) => SelectedFilter switch
+    {
+        "Available" => book.AvailableCopies > 0,
+        "Out of stock" => book.AvailableCopies == 0,
+        _ => true
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        AllItems = await BookSvc.GetAllAsync();
+        ClampPage();
+        isLoading = false;
+    }
+
+    private async Task ConfirmDeleteAsync(int id)
+    {
+        pendingDeleteId = null;
+        errorMessage = null;
+
+        if (!await BookSvc.DeleteAsync(id))
+        {
+            errorMessage = "Cannot delete: this book has active loans or reservations.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

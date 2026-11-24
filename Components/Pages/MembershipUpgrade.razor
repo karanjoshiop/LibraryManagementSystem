@@ -1,0 +1,158 @@
+@page "/memberships/upgrade/{MemberId:int}"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IMembershipService MembershipSvc
+@inject NavigationManager Nav
+
+<PageTitle>Upgrade plan - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Upgrade plan</h1>
+        <p class="text-muted mb-0">Move a member to a higher active plan.</p>
+    </div>
+    <a href="memberships" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+@if (notFound)
+{
+    <div class="card"><div class="card-body"><div class="alert alert-warning mb-0">Member or active membership not found.</div></div></div>
+}
+else if (isLoading)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else if (availableTypes.Count == 0)
+{
+    <div class="card">
+        <div class="card-body">
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                This member is already on the highest available plan, so there is nothing to upgrade to.
+            </div>
+            <a href="memberships" class="btn btn-outline-secondary mt-3">Back to memberships</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body" style="max-width: 640px;">
+            <div class="alert alert-light border">
+                <div><strong>Member:</strong> @memberName</div>
+                <div><strong>Current plan:</strong> @currentPlan</div>
+                <div><strong>Valid until:</strong> @currentEnd?.ToString("dd MMM yyyy")</div>
+            </div>
+
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label for="newType" class="form-label">New plan</label>
+                    <InputSelect id="newType" class="form-select" @bind-Value="model.NewMembershipTypeId">
+                        <option value="0">-- Select new plan --</option>
+                        @foreach (var type in availableTypes)
+                        {
+                            <option @key="type.MembershipTypeId" value="@type.MembershipTypeId">
+                                @type.Name — @type.Fee.ToString("C") / @type.DurationMonths months
+                            </option>
+                        }
+                    </InputSelect>
+                    @if (availableTypes.Count == 1)
+                    {
+                        <div class="form-text">Only one plan is available, so it is already selected.</div>
+                    }
+                </div>
+
+                <div class="alert alert-info small">
+                    The current membership is marked <strong>Expired</strong> today and a new
+                    <strong>Active</strong> membership starts today. Both rows are kept as history.
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@(availableTypes.Count == 0)">
+                        <i class="bi bi-check-lg me-1"></i>Change plan
+                    </button>
+                    <a href="memberships" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int MemberId { get; set; }
+
+    private sealed class UpgradeModel
+    {
+        [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Please select a new plan.")]
+        public int NewMembershipTypeId { get; set; }
+    }
+
+    private readonly UpgradeModel model = new();
+    private List<MembershipTypeDto> availableTypes = new();
+    private string? memberName;
+    private string? currentPlan;
+    private DateOnly? currentEnd;
+    private bool isLoading = true;
+    private bool notFound;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var formData = await MembershipSvc.GetFormDataAsync();
+        var live = (await MembershipSvc.GetAllAsync())
+            .Where(m => m.MemberId == MemberId
+                     && m.Status == "Active"
+                     && m.EndDate >= DateOnly.FromDateTime(DateTime.Today))
+            .OrderByDescending(m => m.EndDate)
+            .FirstOrDefault();
+
+        if (live is null)
+        {
+            notFound = true;
+            isLoading = false;
+            return;
+        }
+
+        memberName = formData.Members.FirstOrDefault(m => m.MemberId == MemberId)?.FullName;
+        currentPlan = live.TypeName;
+        currentEnd = live.EndDate;
+        // Only higher-priced plans count as an upgrade. A member on the most
+        // expensive plan sees the "nothing to upgrade to" message instead.
+        availableTypes = formData.Types
+            .Where(t => t.IsActive
+                     && t.MembershipTypeId != live.MembershipTypeId
+                     && t.Fee > live.TypeFee)
+            .ToList();
+
+        // With a single option, select it for the librarian.
+        if (availableTypes.Count == 1)
+            model.NewMembershipTypeId = availableTypes[0].MembershipTypeId;
+
+        isLoading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        if (!await MembershipSvc.UpgradeAsync(MemberId, model.NewMembershipTypeId))
+        {
+            errorMessage = "Could not change the plan. Please try again.";
+            return;
+        }
+
+        Nav.NavigateTo("/memberships");
+    }
+}

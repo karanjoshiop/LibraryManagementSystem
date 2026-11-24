@@ -1,0 +1,136 @@
+@page "/loans/edit/{Id:long}"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject ILoanService LoanSvc
+@inject NavigationManager Nav
+
+<PageTitle>Return book - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Return / edit loan</h1>
+        <p class="text-muted mb-0">Record the return date and any fine payment.</p>
+    </div>
+    <a href="loans" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+@if (notFound)
+{
+    <div class="card"><div class="card-body"><div class="alert alert-warning mb-0">Loan not found.</div></div></div>
+}
+else if (isLoading)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body" style="max-width: 680px;">
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                    </div>
+                }
+
+                <dl class="row small text-muted">
+                    <dt class="col-sm-2">Book</dt><dd class="col-sm-10">@loan.BookTitle</dd>
+                    <dt class="col-sm-2">Member</dt><dd class="col-sm-10">@loan.MemberName</dd>
+                    <dt class="col-sm-2">Issued</dt><dd class="col-sm-10">@loan.IssueDate.ToString("dd MMM yyyy")</dd>
+                    <dt class="col-sm-2">Due</dt><dd class="col-sm-10">@loan.DueDate.ToString("dd MMM yyyy")</dd>
+                </dl>
+
+                <div class="row g-3">
+                    <div class="col-md-4 mb-3">
+                        <label for="return" class="form-label">Return date</label>
+                        <InputDate id="return" class="form-control" @bind-Value="model.ReturnDate" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="fine" class="form-label">Fine amount</label>
+                        <InputNumber id="fine" class="form-control" @bind-Value="model.FineAmount" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="paid" class="form-label">Fine paid</label>
+                        <InputNumber id="paid" class="form-control" @bind-Value="model.FinePaidAmount" />
+                    </div>
+                </div>
+
+                <div class="alert alert-info small">
+                    Leaving the fine amount at 0 on a late return will calculate it automatically
+                    using the library settings (per-day rate, capped at the maximum fine).
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Save
+                    </button>
+                    <a href="loans" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    private LoanDto loan = default!;
+    private readonly LoanInput model = new();
+    private bool isLoading = true;
+    private bool notFound;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var item = await LoanSvc.GetByIdAsync(Id);
+        if (item is null)
+        {
+            notFound = true;
+            isLoading = false;
+            return;
+        }
+
+        loan = item;
+        model.BookId = item.BookId;
+        model.MemberId = item.MemberId;
+        model.IssueDate = item.IssueDate;
+        model.DueDate = item.DueDate;
+        model.ReturnDate = item.ReturnDate;
+        model.FineAmount = item.FineAmount;
+        model.FinePaidAmount = item.FinePaidAmount;
+
+        isLoading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+
+        if (model.ReturnDate is not null && model.ReturnDate < loan.IssueDate)
+        {
+            errorMessage = "Return date cannot be before the issue date.";
+            return;
+        }
+
+        if (model.FinePaidAmount < 0 || model.FinePaidAmount > model.FineAmount)
+        {
+            errorMessage = "Fine paid cannot exceed the fine amount.";
+            return;
+        }
+
+        if (!await LoanSvc.UpdateAsync(Id, model))
+        {
+            errorMessage = "Could not save the loan.";
+            return;
+        }
+
+        Nav.NavigateTo("/loans");
+    }
+}

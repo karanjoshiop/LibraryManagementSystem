@@ -1,0 +1,120 @@
+﻿@page "/"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IDashboardService DashboardSvc
+
+<PageTitle>Dashboard - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Dashboard</h1>
+        <p class="text-muted mb-0">Welcome back. Here's an overview of your library.</p>
+    </div>
+</div>
+
+@if (stats is null)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-book"></i></div>
+                    <div class="stat-label">Books</div>
+                    <div class="stat-value">@stats.Books</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-tags"></i></div>
+                    <div class="stat-label">Categories</div>
+                    <div class="stat-value">@stats.Categories</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-info-subtle text-info-emphasis"><i class="bi bi-people"></i></div>
+                    <div class="stat-label">Members</div>
+                    <div class="stat-value">@stats.Members</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-warning-subtle text-warning-emphasis"><i class="bi bi-pencil-square"></i></div>
+                    <div class="stat-label">Authors</div>
+                    <div class="stat-value">@stats.Authors</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-success-subtle text-success"><i class="bi bi-person-badge"></i></div>
+                    <div class="stat-label">Active memberships</div>
+                    <div class="stat-value">@stats.ActiveMemberships</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-primary-subtle text-primary"><i class="bi bi-arrow-left-right"></i></div>
+                    <div class="stat-label">Books on loan</div>
+                    <div class="stat-value">@stats.BooksOnLoan</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-danger-subtle text-danger-emphasis"><i class="bi bi-exclamation-octagon"></i></div>
+                    <div class="stat-label">Overdue loans</div>
+                    <div class="stat-value">@stats.OverdueLoans</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-warning-subtle text-warning-emphasis"><i class="bi bi-clock-history"></i></div>
+                    <div class="stat-label">Pending reservations</div>
+                    <div class="stat-value">@stats.PendingReservations</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Getting started</h5>
+            <p class="text-muted">
+                Use the sidebar to manage the full library: categories, authors, books, members,
+                memberships, loans, reservations and settings.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="books" class="btn btn-primary"><i class="bi bi-book me-1"></i>Manage Books</a>
+                <a href="members" class="btn btn-outline-primary"><i class="bi bi-people me-1"></i>Manage Members</a>
+                <a href="settings" class="btn btn-outline-secondary"><i class="bi bi-sliders2 me-1"></i>Settings</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardStats? stats;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // One service call uses one fresh context with sequential queries.
+        stats = await DashboardSvc.GetStatsAsync();
+    }
+}

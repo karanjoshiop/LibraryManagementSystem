@@ -1,0 +1,188 @@
+@page "/members"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inherits ListPageBase<MemberDto>
+@inject IMemberService MemberSvc
+@inject IMembershipService MembershipSvc
+
+<PageTitle>Members - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Members</h1>
+        <p class="text-muted mb-0">Manage members, their plans and borrowing standing.</p>
+    </div>
+    <a href="members/create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New member
+    </a>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (isLoading)
+        {
+            <div class="text-center py-4 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Loading…
+            </div>
+        }
+        else
+        {
+            <ListToolbar SearchText="@SearchText"
+                         SearchTextChanged="OnSearchChanged"
+                         Placeholder="Search name, email, phone or plan"
+                         ItemLabel="members"
+                         FilterOptions="@FilterOptions"
+                         SelectedFilter="@SelectedFilter"
+                         SelectedFilterChanged="OnFilterChanged"
+                         PageNumber="@PageNumber"
+                         PageNumberChanged="OnPageChanged"
+                         PageSize="@PageSize"
+                         PageSizeChanged="OnPageSizeChanged"
+                         TotalPages="@TotalPages"
+                         TotalCount="@TotalCount" />
+
+            @if (AllItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No members found.
+                </div>
+            }
+            else if (FilteredItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-search fs-1 d-block mb-2"></i>
+                    No members match your search or filter.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Full name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th style="width: 110px;">Plan</th>
+                                <th style="width: 120px;">Valid until</th>
+                                <th style="width: 80px;">Loans</th>
+                                <th style="width: 100px;">Fine due</th>
+                                <th style="width: 100px;">Status</th>
+                                <th style="width: 230px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var member in PageItems)
+                            {
+                                <tr @key="member.MemberId">
+                                    <td class="fw-semibold">@member.FullName</td>
+                                    <td class="text-muted">@member.Email</td>
+                                    <td class="text-muted">@(string.IsNullOrWhiteSpace(member.Phone) ? "-" : member.Phone)</td>
+                                    <td>
+                                        <span class="badge @(member.MembershipExpired ? "bg-warning-subtle text-warning-emphasis" : "bg-primary-subtle text-primary-emphasis")">
+                                            @(member.PlanName ?? "No plan")
+                                        </span>
+                                    </td>
+                                    <td class="text-muted @(member.MembershipExpired ? "text-danger-emphasis" : "")">
+                                        @(member.MembershipEndDate?.ToString("dd MMM yyyy") ?? "-")
+                                    </td>
+                                    <td>@member.OpenLoans</td>
+                                    <td class="@(member.OutstandingFine > 0 ? "text-danger-emphasis fw-semibold" : "text-muted")">
+                                        @(member.OutstandingFine > 0 ? member.OutstandingFine.ToString("C") : "-")
+                                    </td>
+                                    <td>
+                                        <span class="badge @(member.IsActive ? "bg-success-subtle text-success-emphasis" : "bg-secondary-subtle text-secondary-emphasis")">
+                                            @(member.IsActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                                            @if (pendingDeleteId == member.MemberId)
+                                            {
+                                                <span class="small me-1">Delete?</span>
+                                                <button class="btn btn-sm btn-danger"
+                                                        @onclick="() => ConfirmDeleteAsync(member.MemberId)">Yes</button>
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => pendingDeleteId = null">Cancel</button>
+                                            }
+                                            else
+                                            {
+                                                <a href="@($"members/edit/{member.MemberId}")"
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => pendingDeleteId = member.MemberId">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private int? pendingDeleteId;
+
+    protected override IReadOnlyList<string> FilterOptions =>
+        new[] { "All", "Active", "Inactive", "Expired plan" };
+
+    protected override IEnumerable<string?> GetSearchValues(MemberDto member) => new[]
+    {
+        member.FullName,
+        member.Email,
+        member.Phone,
+        member.PlanName
+    };
+
+    protected override bool MatchesFilter(MemberDto member) => SelectedFilter switch
+    {
+        "Active" => member.IsActive,
+        "Inactive" => !member.IsActive,
+        "Expired plan" => member.MembershipExpired,
+        _ => true
+    };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        // Keep stored membership statuses in sync with dates before showing them.
+        await MembershipSvc.RefreshExpiriesAsync();
+        AllItems = await MemberSvc.GetAllAsync();
+        ClampPage();
+        isLoading = false;
+    }
+
+    private async Task ConfirmDeleteAsync(int id)
+    {
+        pendingDeleteId = null;
+        errorMessage = null;
+
+        if (!await MemberSvc.DeleteAsync(id))
+        {
+            errorMessage = "Cannot delete: this member has memberships, loans or reservations.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

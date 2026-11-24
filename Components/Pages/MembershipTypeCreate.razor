@@ -1,0 +1,94 @@
+@page "/membership-types/create"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IMembershipTypeService TypeSvc
+@inject NavigationManager Nav
+
+<PageTitle>New membership type - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>New membership type</h1>
+        <p class="text-muted mb-0">Define a new membership plan.</p>
+    </div>
+    <a href="membership-types" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 640px;">
+        <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger d-flex align-items-center" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                </div>
+            }
+
+            <div class="mb-3">
+                <label for="name" class="form-label">Name</label>
+                <InputText id="name" class="form-control" @bind-Value="model.Name" />
+                <ValidationMessage For="@(() => model.Name)" />
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6 mb-3">
+                    <label for="duration" class="form-label">Duration (months)</label>
+                    <InputNumber id="duration" class="form-control" @bind-Value="model.DurationMonths" />
+                    <ValidationMessage For="@(() => model.DurationMonths)" />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="fee" class="form-label">Fee</label>
+                    <InputNumber id="fee" class="form-control" @bind-Value="model.Fee" />
+                    <ValidationMessage For="@(() => model.Fee)" />
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6 mb-3">
+                    <label for="borrowLimit" class="form-label">Borrow limit</label>
+                    <InputNumber id="borrowLimit" class="form-control" @bind-Value="model.BorrowLimit" />
+                    <ValidationMessage For="@(() => model.BorrowLimit)" />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="loanPeriod" class="form-label">Loan period (days)</label>
+                    <InputNumber id="loanPeriod" class="form-control" @bind-Value="model.LoanPeriodDays" />
+                    <ValidationMessage For="@(() => model.LoanPeriodDays)" />
+                </div>
+            </div>
+
+            <div class="mb-4 form-check">
+                <InputCheckbox id="isActive" class="form-check-input" @bind-Value="model.IsActive" />
+                <label for="isActive" class="form-check-label">Active plan</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+                <a href="membership-types" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private readonly MembershipTypeInput model = new() { IsActive = true };
+    private string? errorMessage;
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        if (!await TypeSvc.CreateAsync(model))
+        {
+            errorMessage = "A membership type with this name already exists.";
+            return;
+        }
+
+        Nav.NavigateTo("/membership-types");
+    }
+}

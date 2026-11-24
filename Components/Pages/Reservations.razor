@@ -1,0 +1,189 @@
+@page "/reservations"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inherits ListPageBase<ReservationDto>
+@inject IReservationService ReservationSvc
+
+<PageTitle>Reservations - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Reservations</h1>
+        <p class="text-muted mb-0">Manage member reservations and their queue status.</p>
+    </div>
+    <a href="reservations/create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New reservation
+    </a>
+</div>
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (isLoading)
+        {
+            <div class="text-center py-4 text-muted">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                Loading…
+            </div>
+        }
+        else
+        {
+            <ListToolbar SearchText="@SearchText"
+                         SearchTextChanged="OnSearchChanged"
+                         Placeholder="Search book, member or status"
+                         ItemLabel="reservations"
+                         FilterOptions="@FilterOptions"
+                         SelectedFilter="@SelectedFilter"
+                         SelectedFilterChanged="OnFilterChanged"
+                         PageNumber="@PageNumber"
+                         PageNumberChanged="OnPageChanged"
+                         PageSize="@PageSize"
+                         PageSizeChanged="OnPageSizeChanged"
+                         TotalPages="@TotalPages"
+                         TotalCount="@TotalCount" />
+
+            @if (AllItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                    No reservations found.
+                </div>
+            }
+            else if (FilteredItems.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-search fs-1 d-block mb-2"></i>
+                    No reservations match your search or filter.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Book</th>
+                                <th>Member</th>
+                                <th style="width: 180px;">Reserved at</th>
+                                <th style="width: 120px;">Status</th>
+                                <th style="width: 230px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in PageItems)
+                            {
+                                <tr @key="item.ReservationId">
+                                    <td class="fw-semibold">@item.BookTitle</td>
+                                    <td class="text-muted">@item.MemberName</td>
+                                    <td class="text-muted">@item.ReservedAt.ToString("dd MMM yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="badge @(item.Status == "Pending" ? "bg-warning-subtle text-warning-emphasis" : item.Status == "Fulfilled" ? "bg-success-subtle text-success-emphasis" : "bg-secondary-subtle text-secondary-emphasis")">
+                                            @item.Status
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                                            @if (pendingDeleteId == item.ReservationId)
+                                            {
+                                                <span class="small me-1">Delete?</span>
+                                                <button class="btn btn-sm btn-danger"
+                                                        @onclick="() => ConfirmDeleteAsync(item.ReservationId)">
+                                                    Yes
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary"
+                                                        @onclick="() => pendingDeleteId = null">
+                                                    Cancel
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                @if (item.Status == "Pending")
+                                                {
+                                                    <button class="btn btn-sm btn-outline-success"
+                                                            @onclick="() => FulfillAsync(item.ReservationId)">
+                                                        <i class="bi bi-check2-circle"></i> Fulfil
+                                                    </button>
+                                                    <a href="@($"reservations/edit/{item.ReservationId}")"
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                }
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => pendingDeleteId = item.ReservationId">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private long? pendingDeleteId;
+
+    protected override IReadOnlyList<string> FilterOptions =>
+        new[] { "All", "Pending", "Fulfilled", "Cancelled", "Expired" };
+
+    protected override IEnumerable<string?> GetSearchValues(ReservationDto item) => new[]
+    {
+        item.BookTitle,
+        item.MemberName,
+        item.Status
+    };
+
+    protected override bool MatchesFilter(ReservationDto item) =>
+        SelectedFilter == "All" || item.Status == SelectedFilter;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        // Pending holds past the configured window become Expired.
+        await ReservationSvc.ExpireOldReservationsAsync();
+        AllItems = await ReservationSvc.GetAllAsync();
+        ClampPage();
+        isLoading = false;
+    }
+
+    private async Task FulfillAsync(long id)
+    {
+        errorMessage = null;
+        var result = await ReservationSvc.FulfillAsync(id);
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage ?? "Could not fulfil this reservation.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ConfirmDeleteAsync(long id)
+    {
+        pendingDeleteId = null;
+        errorMessage = null;
+
+        if (!await ReservationSvc.DeleteAsync(id))
+        {
+            errorMessage = "Could not delete this reservation.";
+            return;
+        }
+
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,87 @@
+@page "/members/create"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IMemberService MemberSvc
+@inject NavigationManager Nav
+
+<PageTitle>New member - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>New member</h1>
+        <p class="text-muted mb-0">Add a new member to the library.</p>
+    </div>
+    <a href="members" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+<div class="alert alert-info small">
+    <i class="bi bi-info-circle me-1"></i>
+    Every new member is automatically given the free <strong>Regular</strong> plan (12 months),
+    so they can borrow books right away. Upgrades can be done later from the Memberships page.
+</div>
+
+<div class="card">
+    <div class="card-body" style="max-width: 640px;">
+        <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger d-flex align-items-center" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                </div>
+            }
+
+            <div class="mb-3">
+                <label for="fullName" class="form-label">Full name</label>
+                <InputText id="fullName" class="form-control" @bind-Value="model.FullName" />
+                <ValidationMessage For="@(() => model.FullName)" />
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-7 mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <InputText id="email" type="email" class="form-control" @bind-Value="model.Email" />
+                    <ValidationMessage For="@(() => model.Email)" />
+                </div>
+                <div class="col-md-5 mb-3">
+                    <label for="phone" class="form-label">Phone <span class="text-muted small">(optional)</span></label>
+                    <InputText id="phone" class="form-control" @bind-Value="model.Phone" />
+                    <ValidationMessage For="@(() => model.Phone)" />
+                </div>
+            </div>
+
+            <div class="mb-4 form-check">
+                <InputCheckbox id="isActive" class="form-check-input" @bind-Value="model.IsActive" />
+                <label for="isActive" class="form-check-label">Active member</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save
+                </button>
+                <a href="members" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private readonly MemberInput model = new() { IsActive = true };
+    private string? errorMessage;
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        if (!await MemberSvc.CreateAsync(model))
+        {
+            errorMessage = "A member with this email already exists.";
+            return;
+        }
+
+        Nav.NavigateTo("/members");
+    }
+}

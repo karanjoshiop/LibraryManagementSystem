@@ -1,0 +1,124 @@
+@page "/reservations/create"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject IReservationService ReservationSvc
+@inject NavigationManager Nav
+
+<PageTitle>New reservation - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>New reservation</h1>
+        <p class="text-muted mb-0">Reserve a book for an active member.</p>
+    </div>
+    <a href="reservations" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to list
+    </a>
+</div>
+
+@if (isLoading)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body" style="max-width: 640px;">
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label for="book" class="form-label">Book</label>
+                    @if (formData.Books.Count == 0)
+                    {
+                        <div class="alert alert-info small mb-0">
+                            No books are currently out of copies. A reservation is only needed when every copy is on loan — issue a loan instead.
+                        </div>
+                    }
+                    else
+                    {
+                        <InputSelect id="book" class="form-select" @bind-Value="model.BookId">
+                            <option value="0">-- Select book --</option>
+                            @foreach (var book in formData.Books)
+                            {
+                                <option @key="book.BookId" value="@book.BookId">
+                                    @book.Title (0 of @book.TotalCopies available)
+                                </option>
+                            }
+                        </InputSelect>
+                        <div class="form-text">Only books with no available copies can be reserved.</div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label for="member" class="form-label">Member</label>
+                    <InputSelect id="member" class="form-select" @bind-Value="model.MemberId">
+                        <option value="0">-- Select member --</option>
+                        @foreach (var member in formData.Members)
+                        {
+                            <option @key="member.MemberId" value="@member.MemberId">@member.FullName</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="alert alert-info small">
+                    New reservations always enter the queue as <strong>Pending</strong>.
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@(formData.Books.Count == 0)">
+                        <i class="bi bi-check-lg me-1"></i>Save
+                    </button>
+                    <a href="reservations" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private ReservationFormData formData = new(new(), new());
+    private readonly ReservationInput model = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        formData = await ReservationSvc.GetFormDataAsync();
+        isLoading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+
+        if (formData.Books.Count == 0)
+        {
+            errorMessage = "No books are currently out of copies. Issue a loan instead.";
+            return;
+        }
+
+        if (model.BookId == 0 || model.MemberId == 0)
+        {
+            errorMessage = "Please select a book and a member.";
+            return;
+        }
+
+        var result = await ReservationSvc.CreateAsync(model);
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage ?? "Could not save the reservation.";
+            return;
+        }
+
+        Nav.NavigateTo("/reservations");
+    }
+}

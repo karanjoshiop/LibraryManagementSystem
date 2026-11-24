@@ -1,0 +1,119 @@
+@page "/settings"
+@attribute [Authorize]
+@using LibraryManagementSystem.Models.Dtos
+@inject ISettingsService SettingsSvc
+
+<PageTitle>Settings - Library Management</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Library settings</h1>
+        <p class="text-muted mb-0">Rules used for fines, borrowing and reservation holds.</p>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="card"><div class="card-body text-muted">Loading…</div></div>
+}
+else if (setting is null)
+{
+    <div class="card"><div class="card-body"><div class="alert alert-warning mb-0">Settings row not found.</div></div></div>
+}
+else
+{
+    <div class="card">
+        <div class="card-body" style="max-width: 640px;">
+            <EditForm Model="@model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                    </div>
+                }
+                @if (saved)
+                {
+                    <div class="alert alert-success" role="status">Settings saved.</div>
+                }
+
+                <div class="row g-3">
+                    <div class="col-md-6 mb-3">
+                        <label for="holdDays" class="form-label">Reservation hold (days)</label>
+                        <InputNumber id="holdDays" class="form-control" @bind-Value="model.ReservationHoldDays" />
+                        <div class="form-text">Pending reservations older than this expire automatically.</div>
+                        <ValidationMessage For="@(() => model.ReservationHoldDays)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="finePerDay" class="form-label">Fine per day</label>
+                        <InputNumber id="finePerDay" class="form-control" @bind-Value="model.FinePerDay" />
+                        <ValidationMessage For="@(() => model.FinePerDay)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="maxFine" class="form-label">Maximum fine</label>
+                        <InputNumber id="maxFine" class="form-control" @bind-Value="model.MaximumFine" />
+                        <ValidationMessage For="@(() => model.MaximumFine)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="borrowLimit" class="form-label">Unpaid fine borrowing limit</label>
+                        <InputNumber id="borrowLimit" class="form-control" @bind-Value="model.FineBorrowingLimit" />
+                        <div class="form-text">Borrowing is blocked only when unpaid fines exceed this amount.</div>
+                        <ValidationMessage For="@(() => model.FineBorrowingLimit)" />
+                    </div>
+                </div>
+
+                @if (setting.UpdatedAt is not null)
+                {
+                    <div class="text-muted small mb-3">
+                        Last updated @setting.UpdatedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm")
+                    </div>
+                }
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i>Save settings
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private LibrarySettingDto? setting;
+    private readonly LibrarySettingInput model = new();
+    private bool isLoading = true;
+    private bool saved;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        setting = await SettingsSvc.GetAsync();
+        if (setting is not null)
+        {
+            model.ReservationHoldDays = setting.ReservationHoldDays;
+            model.FinePerDay = setting.FinePerDay;
+            model.MaximumFine = setting.MaximumFine;
+            model.FineBorrowingLimit = setting.FineBorrowingLimit;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = null;
+        saved = false;
+
+        if (!await SettingsSvc.UpdateAsync(model))
+        {
+            errorMessage = "Could not save settings. Check the values and try again.";
+            return;
+        }
+
+        setting = await SettingsSvc.GetAsync();
+        saved = true;
+    }
+}
