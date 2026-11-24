@@ -111,14 +111,12 @@ wwwroot/app.css            Custom theme (sidebar, cards, forms, login, responsiv
 Migrations/                EF Core migrations
 docs/
   LibraryManagementSystem.dbml   ER diagram source for dbdiagram.io
+  er-diagram.png                 Exported ER diagram
 ```
 
 ## ER diagram
 
-The DBML source is in `docs/LibraryManagementSystem.dbml`. Paste it into
-<https://dbdiagram.io>, then export the diagram and paste the image here.
-
-<!-- Paste the exported ER diagram image below. -->
+![ER Diagram](docs/er-diagram.png)
 
 ## Design decisions and assumptions
 
@@ -180,7 +178,7 @@ npx playwright test          # once Playwright tests are added
 
 - Fulfilling a reservation runs the same borrowing checks as the Issue Book form, in the same transaction; if a rule fails, the reason is shown and the reservation stays Pending. An older Pending reservation for the same book must be fulfilled, cancelled or expired first.
 - The free Regular plan is looked up by the exact name `Regular`, and upgrades/renewals rely on seeded plan data. Renaming/deleting that plan disables automatic assignment.
-- The ER diagram source (`docs/LibraryManagementSystem.dbml`) is ready; the exported image still needs to be pasted into this section.
+- The ER diagram is in `docs/er-diagram.png` and its DBML source is in `docs/LibraryManagementSystem.dbml`.
 - Playwright end-to-end tests are planned for the final stage.
 - UI is intentionally simple; no high-level design framework is used.
 - Name uniqueness (category/author/membership type) and "one active membership" are enforced in services, not by case-insensitive/partial unique DB indexes. A future migration can harden this.
