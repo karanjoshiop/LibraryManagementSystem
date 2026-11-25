@@ -1,6 +1,7 @@
 using LibraryManagementSystem.Data;
 using LibraryManagementSystem.Models;
 using LibraryManagementSystem.Models.Dtos;
+using LibraryManagementSystem.Services.Policies;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagementSystem.Services
@@ -35,10 +36,10 @@ namespace LibraryManagementSystem.Services
                 })
                 .FirstOrDefaultAsync();
 
-            if (plan is null) return today.AddDays(14);
-
-            var due = today.AddDays(plan.LoanPeriodDays);
-            return plan.EndDate < due ? plan.EndDate : due;
+            return plan is null
+                ? LoanDatePolicy.CalculateDueDate(today, 14, null)
+                : LoanDatePolicy.CalculateDueDate(
+                    today, plan.LoanPeriodDays, plan.EndDate);
         }
 
         /// <summary>
@@ -48,7 +49,7 @@ namespace LibraryManagementSystem.Services
         public static async Task<IssueResult> AddLoanAsync(
             LibraryDbContext db, LoanInput input)
         {
-            if (input.DueDate < input.IssueDate)
+            if (!LoanDatePolicy.IsOnOrAfterIssueDate(input.IssueDate, input.DueDate))
                 return IssueResult.Fail("Due date cannot be before the issue date.");
 
             // PostgreSQL row locks serialize competing issues for the same copy
@@ -91,7 +92,8 @@ namespace LibraryManagementSystem.Services
             if (type is null || !type.IsActive)
                 return IssueResult.Fail("The member's plan is no longer active.");
 
-            if (input.DueDate > input.IssueDate.AddDays(type.LoanPeriodDays))
+            if (!LoanDatePolicy.IsWithinLoanPeriod(
+                    input.IssueDate, input.DueDate, type.LoanPeriodDays))
                 return IssueResult.Fail(
                     $"The due date exceeds the {type.LoanPeriodDays}-day loan period for the {type.Name} plan.");
 
@@ -105,12 +107,13 @@ namespace LibraryManagementSystem.Services
 
             // BR-06: give the librarian the real reason instead of relying on
             // the unique index to produce a generic DbUpdateException.
-            if (activeLoans.Any(l => l.BookId == input.BookId))
+            var matchingOpenLoans = activeLoans.Count(l => l.BookId == input.BookId);
+            if (BorrowRules.IsDuplicateOpenLoan(matchingOpenLoans))
                 return IssueResult.Fail(
                     $"This member already has an active loan for '{book.Title}'.");
 
             // BR-01: borrow limit comes from the member's plan.
-            if (activeLoans.Count >= type.BorrowLimit)
+            if (BorrowRules.BorrowLimitReached(activeLoans.Count, type.BorrowLimit))
                 return IssueResult.Fail(
                     $"Borrow limit reached: {activeLoans.Count} of {type.BorrowLimit} books are already on loan to this member.");
 
@@ -125,7 +128,7 @@ namespace LibraryManagementSystem.Services
                 .Where(l => l.MemberId == input.MemberId)
                 .SumAsync(l => l.FineAmount - l.FinePaidAmount);
 
-            if (unpaidFines > borrowingLimit)
+            if (BorrowRules.FinesBlock(unpaidFines, borrowingLimit))
                 return IssueResult.Fail(
                     $"Unpaid fines of {unpaidFines:C} exceed the {borrowingLimit:C} borrowing limit. Collect payment first.");
 
@@ -136,7 +139,7 @@ namespace LibraryManagementSystem.Services
                               && l.ReturnDate == null
                               && l.DeletedAt == null);
 
-            if (issuedCopies >= book.TotalCopies)
+            if (!BorrowRules.IsCopyAvailable(book.TotalCopies, issuedCopies))
                 return IssueResult.Fail($"No available copies of '{book.Title}' right now.");
 
             db.Loans.Add(new Loan

@@ -9,7 +9,7 @@ fines and reservations. Built with .NET 8, EF Core 8 (code-first) and PostgreSQL
 - Bootstrap 5.3.3 + Bootstrap Icons (both self-hosted), with a small custom theme in `wwwroot/app.css`
 - Entity Framework Core 8 with Npgsql provider, code-first migrations
 - PostgreSQL (administered through pgAdmin)
-- Playwright (end-to-end BR tests planned — to be added at the end)
+- xUnit + Microsoft.NET.Test.Sdk (business-rule unit tests; Playwright E2E is optional future work)
 
 ## Setup
 
@@ -160,6 +160,27 @@ docs/
 | BR-13 Reservation hold | `ReservationService.ExpireOldReservationsAsync` uses `ReservationHoldDays` from Settings |
 | BR-14 Auto due date | `LoanService.GetBorrowInfoAsync` + loan form set due date from `LoanPeriodDays`, capped at membership end date |
 
+## Unit testing (xUnit)
+
+The decisions that do not need a database were extracted from the services into
+pure helpers under `Services/Policies`. The real services call these same helpers,
+so a passing test means the app uses the tested decision, not a copy of it.
+
+| Rule | Test file | What it proves |
+|---|---|---|
+| BR-01, BR-02, BR-05, BR-06 | `LibraryManagementSystem.Tests/BorrowRulesTests.cs` | 3/5-book limits, free-copy arithmetic, exactly ₹100 allowed, duplicate open-loan detection |
+| BR-03 | `LibraryManagementSystem.Tests/LoanDatePolicyTests.cs` | 14/21-day periods including the exact last valid day, and membership-end cap |
+| BR-04 | `LibraryManagementSystem.Tests/FineCalculatorTests.cs` | ₹5/day, ₹200 cap, manual override, unchanged-date behaviour and fine-paid validation |
+| BR-07 | `LibraryManagementSystem.Tests/ReservationQueuePolicyTests.cs` | `ReservedAt` FCFS ordering with `ReservationId` tie-break |
+| Unix seconds convention | `LibraryManagementSystem.Tests/UnixTimeConverterTests.cs` | Known timestamps, UTC round-trip and `Unspecified`-as-UTC handling |
+
+Current result: **48 tests, 0 failures**.
+
+BR-08 (transactions/row locks) and BR-09 (soft-delete guards) are deliberately
+not claimed as unit tests: they need a real PostgreSQL integration test or a
+Playwright end-to-end test to prove database behaviour. EF InMemory cannot prove
+transactions, `FOR UPDATE` locks or filtered unique indexes.
+
 ## Useful commands
 
 ```powershell
@@ -171,7 +192,10 @@ dotnet ef migrations remove
 dotnet ef database update
 dotnet ef dbcontext script   # verify the generated SQL model
 
-npx playwright test          # once Playwright tests are added
+dotnet test                  # run all 48 xUnit tests (stop the app first)
+dotnet test -c EfCheck       # works even while the Blazor app is running
+dotnet test --logger "console;verbosity=detailed"
+# npx playwright test        # optional future end-to-end stage
 ```
 
 ## Known limitations / planned work
@@ -179,7 +203,7 @@ npx playwright test          # once Playwright tests are added
 - Fulfilling a reservation runs the same borrowing checks as the Issue Book form, in the same transaction; if a rule fails, the reason is shown and the reservation stays Pending. An older Pending reservation for the same book must be fulfilled, cancelled or expired first.
 - The free Regular plan is looked up by the exact name `Regular`, and upgrades/renewals rely on seeded plan data. Renaming/deleting that plan disables automatic assignment.
 - The ER diagram is in `docs/er-diagram.png` and its DBML source is in `docs/LibraryManagementSystem.dbml`.
-- Playwright end-to-end tests are planned for the final stage.
+- Playwright end-to-end tests are not part of this phase; they can be added later if browser-level verification is required.
 - UI is intentionally simple; no high-level design framework is used.
 - Name uniqueness (category/author/membership type) and "one active membership" are enforced in services, not by case-insensitive/partial unique DB indexes. A future migration can harden this.
 - The interactive circuit caches the authenticated principal at prerender; signing out in another tab only takes effect after a page reload.

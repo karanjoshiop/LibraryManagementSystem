@@ -1,6 +1,7 @@
 using LibraryManagementSystem.Data;
 using LibraryManagementSystem.Models;
 using LibraryManagementSystem.Models.Dtos;
+using LibraryManagementSystem.Services.Policies;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagementSystem.Services
@@ -215,36 +216,20 @@ namespace LibraryManagementSystem.Services
                     return false;
                 }
 
-                if (input.FinePaidAmount < 0)
-                {
-                    await tx.RollbackAsync();
-                    return false;
-                }
-
                 var settings = await db.LibrarySettings.FirstOrDefaultAsync();
                 var finePerDay = settings?.FinePerDay ?? 5m;
                 var maximumFine = settings?.MaximumFine ?? 200m;
 
-                decimal fine;
-                if (input.ReturnDate is null)
-                {
-                    fine = 0;
-                }
-                else if (input.FineAmount > 0)
-                {
-                    fine = input.FineAmount; // manual override from the edit form
-                }
-                else if (loan.ReturnDate == input.ReturnDate && loan.FineAmount > 0)
-                {
-                    fine = loan.FineAmount; // return date unchanged; keep existing fine
-                }
-                else
-                {
-                    var lateDays = input.ReturnDate.Value.DayNumber - loan.DueDate.DayNumber;
-                    fine = lateDays > 0 ? Math.Min(lateDays * finePerDay, maximumFine) : 0;
-                }
+                var fine = FineCalculator.Calculate(
+                    input.ReturnDate,
+                    loan.DueDate,
+                    loan.ReturnDate,
+                    loan.FineAmount,
+                    input.FineAmount,
+                    finePerDay,
+                    maximumFine);
 
-                if (input.FinePaidAmount > fine)
+                if (!FineCalculator.IsFinePaidValid(input.FinePaidAmount, fine))
                 {
                     await tx.RollbackAsync();
                     return false;

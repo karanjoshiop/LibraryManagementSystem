@@ -1,6 +1,7 @@
 using LibraryManagementSystem.Data;
 using LibraryManagementSystem.Models;
 using LibraryManagementSystem.Models.Dtos;
+using LibraryManagementSystem.Services.Policies;
 using Microsoft.EntityFrameworkCore;
 
 namespace LibraryManagementSystem.Services
@@ -156,18 +157,27 @@ namespace LibraryManagementSystem.Services
                     return IssueResult.Fail("Only a pending reservation can be fulfilled.");
                 }
 
-                var earlier = await db.Reservations
+                // Materialize the small pending queue, then use the same pure
+                // ordering rule that the unit tests cover.
+                var pending = await db.Reservations
                     .AsNoTracking()
                     .Where(r => r.BookId == reservation.BookId
                              && r.Status == "Pending"
-                             && r.DeletedAt == null
-                             && (r.ReservedAt < reservation.ReservedAt
-                                 || (r.ReservedAt == reservation.ReservedAt
-                                     && r.ReservationId < reservation.ReservationId)))
+                             && r.DeletedAt == null)
                     .OrderBy(r => r.ReservedAt)
                     .ThenBy(r => r.ReservationId)
-                    .Select(r => new { r.ReservationId, MemberName = r.Member.FullName })
-                    .FirstOrDefaultAsync();
+                    .Select(r => new
+                    {
+                        r.ReservationId,
+                        r.ReservedAt,
+                        MemberName = r.Member.FullName
+                    })
+                    .ToListAsync();
+
+                var earlier = pending.FirstOrDefault(r =>
+                    ReservationQueuePolicy.ComesBefore(
+                        r.ReservedAt, r.ReservationId,
+                        reservation.ReservedAt, reservation.ReservationId));
 
                 if (earlier is not null)
                 {

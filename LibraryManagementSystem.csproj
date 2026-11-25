@@ -7,7 +7,16 @@
     <UserSecretsId>LibraryManagementSystem.Dev</UserSecretsId>
   </PropertyGroup>
 
+  <!-- The test project is nested in this folder, but it is a separate project. -->
   <ItemGroup>
+    <Compile Remove="LibraryManagementSystem.Tests/**" />
+    <None Remove="LibraryManagementSystem.Tests/**" />
+    <EmbeddedResource Remove="LibraryManagementSystem.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.34" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.34" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.34">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
