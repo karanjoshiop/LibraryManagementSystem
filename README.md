@@ -194,6 +194,7 @@ dotnet ef dbcontext script   # verify the generated SQL model
 
 dotnet test                  # run all 48 xUnit tests (stop the app first)
 dotnet test -c EfCheck       # works even while the Blazor app is running
+dotnet test -c EfCheck --list-tests
 dotnet test --logger "console;verbosity=detailed"
 # npx playwright test        # optional future end-to-end stage
 ```

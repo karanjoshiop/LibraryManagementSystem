@@ -11,6 +11,8 @@
   <ItemGroup>
     <Compile Remove="LibraryManagementSystem.Tests/**" />
     <None Remove="LibraryManagementSystem.Tests/**" />
+    <Content Remove="LibraryManagementSystem.Tests/**" />
+    <ContentWithTargetPath Remove="LibraryManagementSystem.Tests/**" />
     <EmbeddedResource Remove="LibraryManagementSystem.Tests/**" />
   </ItemGroup>
 
